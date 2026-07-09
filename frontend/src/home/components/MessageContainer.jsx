@@ -299,7 +299,7 @@ const MessageContainer = ({ onBackUser }) => {
                             {searchStatus && (
                                 <p className={`text-xs mt-2 ${searchStatus.working ? 'text-green-400' : 'text-amber-400'}`}>
                                     {searchStatus.message}
-                                    {!searchStatus.working && ' Send new messages after fixing the key — old messages are not searchable.'}
+                                    {searchStatus.working && ' Only messages sent after the API key was added are searchable.'}
                                 </p>
                             )}
                         </div>

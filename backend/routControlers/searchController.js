@@ -1,27 +1,12 @@
 import Conversation from "../Models/conversationModels.js";
 import Message from "../Models/messageSchema.js";
 import Room from "../Models/roomModel.js";
-import { cosineSimilarity, getEmbedding, isEmbeddingEnabled } from "../services/embedding.js";
+import { checkEmbeddingHealth, cosineSimilarity, getEmbedding, isEmbeddingEnabled } from "../services/embedding.js";
 
 export const searchStatus = async (req, res) => {
     try {
-        if (!isEmbeddingEnabled()) {
-            return res.status(200).send({
-                enabled: false,
-                working: false,
-                message: "OPENAI_API_KEY is not set on the server.",
-            });
-        }
-
-        const { embedding, error } = await getEmbedding("health check");
-
-        res.status(200).send({
-            enabled: true,
-            working: Boolean(embedding),
-            message: embedding
-                ? "OpenAI embeddings are working."
-                : error || "OpenAI API call failed.",
-        });
+        const status = await checkEmbeddingHealth();
+        res.status(200).send(status);
     } catch (error) {
         res.status(500).send({
             enabled: false,
