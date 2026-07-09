@@ -24,28 +24,30 @@ const Register = () => {
 
     const handelSubmit=async(e)=>{
         e.preventDefault();
-        setLoading(true)
-        if(inputData.password !== inputData.confpassword.toLowerCase()){
-            setLoading(false)
-            return toast.error("Password Dosen't match")
+        if (!inputData.gender) {
+            return toast.error("Please select male or female");
         }
+        if (inputData.password !== inputData.confpassword) {
+            return toast.error("Passwords don't match");
+        }
+        setLoading(true);
         try {
-            const register = await axios.post(`/api/auth/register`,inputData);
+            const register = await axios.post(`/api/auth/register`, inputData);
             const data = register.data;
-            if(data.success === false){
-                setLoading(false)
-                toast.error(data.message)
-                console.log(data.message);
+            if (data.success === false) {
+                toast.error(typeof data.message === 'string' ? data.message : "Registration failed");
+                return;
             }
-            toast.success(data?.message)
-            localStorage.setItem('chatapp',JSON.stringify(data))
-            setAuthUser(data)
-            setLoading(false)
-            navigate('/chat')
+            toast.success("Account created successfully!");
+            localStorage.setItem('chatapp', JSON.stringify(data));
+            setAuthUser(data);
+            navigate('/chat');
         } catch (error) {
-            setLoading(false)
+            const msg = error?.response?.data?.message;
+            toast.error(typeof msg === 'string' ? msg : "Registration failed. Please try again.");
             console.log(error);
-            toast.error(error?.response?.data?.message)
+        } finally {
+            setLoading(false);
         }
     }
 

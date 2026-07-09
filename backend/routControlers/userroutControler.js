@@ -7,9 +7,11 @@ export const userRegister = async (req, res) => {
         const { fullname, username, email, gender, password, profilepic } = req.body;
         const user = await User.findOne({ username, email });
         if (user) return res.status(500).send({ success: false, message: " UserName or Email Alredy Exist " });
+        if (!gender) {
+            return res.status(400).send({ success: false, message: "Please select a gender" });
+        }
+
         const hashPassword = bcryptjs.hashSync(password, 10);
-        const profileBoy = profilepic || "";
-        const profileGirl = profilepic || "";
 
         const newUser = new User({
             fullname,
@@ -17,7 +19,7 @@ export const userRegister = async (req, res) => {
             email,
             password: hashPassword,
             gender,
-            profilepic: gender === "male" ? profileBoy : profileGirl
+            ...(profilepic ? { profilepic } : {}),
         })
 
         if (newUser) {
@@ -35,10 +37,10 @@ export const userRegister = async (req, res) => {
             email: newUser.email,
         })
     } catch (error) {
-        res.status(500).send({
-            success: false,
-            message: error
-        })
+        const message = error.code === 11000
+            ? "Username or email already exists"
+            : error.message || "Registration failed";
+        res.status(500).send({ success: false, message });
         console.log(error);
     }
 }
@@ -65,8 +67,8 @@ export const userLogin = async (req, res) => {
     } catch (error) {
         res.status(500).send({
             success: false,
-            message: error
-        })
+            message: error.message || "Login failed"
+        });
         console.log(error);
     }
 }
