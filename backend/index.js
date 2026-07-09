@@ -5,6 +5,7 @@ import authRouter from  './rout/authUser.js'
 import messageRouter from './rout/messageRout.js'
 import userRouter from './rout/userRout.js'
 import roomRouter from './rout/roomRout.js'
+import searchRouter from './rout/searchRout.js'
 import cookieParser from "cookie-parser";
 import path from "path";
 
@@ -21,6 +22,7 @@ app.use('/api/auth',authRouter)
 app.use('/api/message',messageRouter)
 app.use('/api/user',userRouter)
 app.use('/api/room',roomRouter)
+app.use('/api/search',searchRouter)
 
 app.use(express.static(path.join(__dirname,"/frontend/dist")))
 

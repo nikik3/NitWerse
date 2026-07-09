@@ -1,19 +1,28 @@
 import Conversation from "../Models/conversationModels.js";
 import Message from "../Models/messageSchema.js";
 import Room from "../Models/roomModel.js";
+import { getEmbedding } from "../services/embedding.js";
 import { getReciverSocketId, io } from "../Socket/socket.js";
+
+const DEFAULT_LIMIT = 50;
+
+async function embedMessageAsync(messageId, text) {
+    const embedding = await getEmbedding(text);
+    if (embedding) {
+        await Message.findByIdAndUpdate(messageId, { embedding });
+    }
+}
 
 export const sendMessage = async (req, res) => {
     try {
         const { messages } = req.body;
         const { id: receiverOrRoomId } = req.params;
-        const { isRoom } = req.query; // Add a query param ?isRoom=true
+        const { isRoom } = req.query;
         const senderId = req.user._id;
 
         let newMessages;
 
         if (isRoom === 'true') {
-            // Room messaging logic
             const room = await Room.findById(receiverOrRoomId);
             if (!room) return res.status(404).send({ success: false, message: "Room not found" });
 
@@ -30,11 +39,10 @@ export const sendMessage = async (req, res) => {
             room.messages.push(newMessages._id);
             await Promise.all([room.save(), newMessages.save()]);
 
-            // Broadcast to everyone in the room
             io.to(room._id.toString()).emit("newMessage", newMessages);
+            embedMessageAsync(newMessages._id, messages);
 
         } else {
-            // 1-on-1 messaging logic
             const reciverId = receiverOrRoomId;
             let chats = await Conversation.findOne({
                 participants: { $all: [senderId, reciverId] }
@@ -56,11 +64,11 @@ export const sendMessage = async (req, res) => {
             chats.messages.push(newMessages._id);
             await Promise.all([chats.save(), newMessages.save()]);
 
-            // Socket.io for 1-on-1
             const reciverSocketId = getReciverSocketId(reciverId);
             if (reciverSocketId) {
                 io.to(reciverSocketId).emit("newMessage", newMessages);
             }
+            embedMessageAsync(newMessages._id, messages);
         }
 
         res.status(201).send(newMessages);
@@ -77,27 +85,47 @@ export const sendMessage = async (req, res) => {
 export const getMessages = async (req, res) => {
     try {
         const { id: receiverOrRoomId } = req.params;
-        const { isRoom } = req.query;
+        const { isRoom, before, limit: limitParam } = req.query;
         const senderId = req.user._id;
+        const limit = Math.min(parseInt(limitParam, 10) || DEFAULT_LIMIT, 100);
+
+        let messageFilter;
 
         if (isRoom === 'true') {
-            const room = await Room.findById(receiverOrRoomId).populate("messages");
-            if (!room) return res.status(200).send([]);
+            const room = await Room.findById(receiverOrRoomId);
+            if (!room) return res.status(200).send({ messages: [], hasMore: false });
             
             if (!room.participants.some(p => p.toString() === senderId.toString())) {
                 return res.status(403).send({ success: false, message: "You must join the room first" });
             }
 
-            return res.status(200).send(room.messages);
+            messageFilter = { roomId: room._id };
         } else {
             const reciverId = receiverOrRoomId;
             const chats = await Conversation.findOne({
                 participants: { $all: [senderId, reciverId] }
-            }).populate("messages");
+            });
 
-            if (!chats) return res.status(200).send([]);
-            return res.status(200).send(chats.messages);
+            if (!chats) return res.status(200).send({ messages: [], hasMore: false });
+
+            messageFilter = { conversationId: chats._id };
         }
+
+        if (before) {
+            const cursorMessage = await Message.findById(before);
+            if (cursorMessage) {
+                messageFilter.createdAt = { $lt: cursorMessage.createdAt };
+            }
+        }
+
+        const fetchedMessages = await Message.find(messageFilter)
+            .sort({ createdAt: -1 })
+            .limit(limit + 1);
+
+        const hasMore = fetchedMessages.length > limit;
+        const messages = fetchedMessages.slice(0, limit).reverse();
+
+        return res.status(200).send({ messages, hasMore });
     } catch (error) {
         res.status(500).send({
             success: false,

@@ -1,22 +1,31 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useCallback } from 'react';
 import userConversation from '../../Zustans/useConversation';
 import { useAuth } from '../../context/AuthContext';
 import { TiMessages } from "react-icons/ti";
-import { IoArrowBackSharp, IoSend } from 'react-icons/io5';
+import { IoArrowBackSharp, IoSend, IoSearch, IoClose } from 'react-icons/io5';
 import axios from 'axios';
 import { toast } from 'react-toastify';
 import { useSocketContext } from '../../context/SocketContext';
 import Avatar from './Avatar';
-import notify from '../../assets/sound/notification.mp3';
 
 const MessageContainer = ({ onBackUser }) => {
     const { messages, selectedConversation, setMessage, setSelectedConversation } = userConversation();
     const { socket } = useSocketContext();
     const { authUser } = useAuth();
     const [loading, setLoading] = useState(false);
+    const [loadingMore, setLoadingMore] = useState(false);
+    const [hasMore, setHasMore] = useState(false);
     const [sending, setSending] = useState(false);
     const [sendData, setSnedData] = useState("");
+    const [showSearch, setShowSearch] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
+    const [searchResults, setSearchResults] = useState([]);
+    const [searching, setSearching] = useState(false);
     const lastMessageRef = useRef();
+    const messagesContainerRef = useRef();
+    const messageRefs = useRef({});
+
+    const roomParam = selectedConversation?.isRoom ? '?isRoom=true' : '';
 
     useEffect(() => {
         if (!socket) return;
@@ -35,64 +44,146 @@ const MessageContainer = ({ onBackUser }) => {
                 if (prev.some((m) => m._id === newMessage._id)) return prev;
                 return [...prev, newMessage];
             });
-
-            if (newMessage.senderId?.toString() !== authUser._id?.toString()) {
-                const sound = new Audio(notify);
-                sound.play().catch(() => {});
-            }
         };
 
         socket.on("newMessage", handleNewMessage);
         return () => socket.off("newMessage", handleNewMessage);
-    }, [socket, selectedConversation, authUser._id, setMessage]);
+    }, [socket, selectedConversation, setMessage]);
 
     useEffect(() => {
-        // If a room is selected, join the socket room
         if (selectedConversation?.isRoom && socket) {
             socket.emit("joinRoom", selectedConversation._id);
         }
     }, [selectedConversation, socket]);
 
     useEffect(() => {
-        setTimeout(() => {
-            lastMessageRef?.current?.scrollIntoView({ behavior: "smooth" });
-        }, 100);
-    }, [messages]);
+        if (!showSearch) {
+            setTimeout(() => {
+                lastMessageRef?.current?.scrollIntoView({ behavior: "smooth" });
+            }, 100);
+        }
+    }, [messages, showSearch]);
 
     useEffect(() => {
         const getMessages = async () => {
             setLoading(true);
+            setShowSearch(false);
+            setSearchResults([]);
+            setSearchQuery("");
             try {
-                const roomParam = selectedConversation?.isRoom ? '?isRoom=true' : '';
                 const get = await axios.get(`/api/message/${selectedConversation?._id}${roomParam}`);
-                const data = await get.data;
+                const data = get.data;
                 if (data?.success === false) {
                     toast.error(data.message || "Could not load messages");
                     setMessage([]);
+                    setHasMore(false);
+                } else if (Array.isArray(data)) {
+                    setMessage(data);
+                    setHasMore(false);
                 } else {
-                    setMessage(Array.isArray(data) ? data : []);
+                    setMessage(data.messages || []);
+                    setHasMore(data.hasMore || false);
                 }
             } catch (error) {
                 toast.error(error.response?.data?.message || "Could not load messages");
                 setMessage([]);
+                setHasMore(false);
             } finally {
                 setLoading(false);
             }
-        }
+        };
 
         if (selectedConversation?._id) getMessages();
-    }, [selectedConversation?._id, selectedConversation?.isRoom, setMessage]);
+    }, [selectedConversation?._id, selectedConversation?.isRoom, setMessage, roomParam]);
+
+    const loadEarlierMessages = async () => {
+        if (!hasMore || loadingMore || messages.length === 0) return;
+
+        const container = messagesContainerRef.current;
+        const previousScrollHeight = container?.scrollHeight || 0;
+
+        setLoadingMore(true);
+        try {
+            const oldestMessage = messages[0];
+            const separator = roomParam ? '&' : '?';
+            const get = await axios.get(
+                `/api/message/${selectedConversation._id}${roomParam}${separator}before=${oldestMessage._id}`
+            );
+            const data = get.data;
+            const olderMessages = Array.isArray(data) ? data : (data.messages || []);
+
+            setMessage((prev) => [...olderMessages, ...prev]);
+            setHasMore(Array.isArray(data) ? false : (data.hasMore || false));
+
+            requestAnimationFrame(() => {
+                if (container) {
+                    container.scrollTop = container.scrollHeight - previousScrollHeight;
+                }
+            });
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Could not load earlier messages");
+        } finally {
+            setLoadingMore(false);
+        }
+    };
+
+    const handleSearch = async (e) => {
+        e.preventDefault();
+        if (!searchQuery.trim()) return;
+
+        setSearching(true);
+        try {
+            const separator = roomParam ? '&' : '?';
+            const res = await axios.get(
+                `/api/search/${selectedConversation._id}${roomParam}${separator}q=${encodeURIComponent(searchQuery.trim())}`
+            );
+            const data = res.data;
+            if (data?.success === false) {
+                toast.error(data.message || "Search failed");
+                setSearchResults([]);
+            } else {
+                setSearchResults(data.results || []);
+                if ((data.results || []).length === 0) {
+                    toast.info("No matching messages found");
+                }
+            }
+        } catch (error) {
+            toast.error(error.response?.data?.message || "Search failed");
+            setSearchResults([]);
+        } finally {
+            setSearching(false);
+        }
+    };
+
+    const scrollToMessage = useCallback((messageId) => {
+        setShowSearch(false);
+        setSearchResults([]);
+        setSearchQuery("");
+        setTimeout(() => {
+            const el = messageRefs.current[messageId];
+            if (el) {
+                el.scrollIntoView({ behavior: "smooth", block: "center" });
+                el.classList.add("ring-2", "ring-indigo-400", "rounded-lg");
+                setTimeout(() => el.classList.remove("ring-2", "ring-indigo-400", "rounded-lg"), 2000);
+            }
+        }, 100);
+    }, []);
+
+    const clearSearch = () => {
+        setShowSearch(false);
+        setSearchResults([]);
+        setSearchQuery("");
+    };
 
     const handelMessages = (e) => {
         setSnedData(e.target.value);
-    }
+    };
 
     const handelSubmit = async (e) => {
         e.preventDefault();
         if (!sendData.trim()) return;
         setSending(true);
         try {
-            const roomParam = selectedConversation?.isRoom ? '?isRoom=true' : '';
             const res = await axios.post(`/api/message/send/${selectedConversation?._id}${roomParam}`, { messages: sendData.trim() });
             const data = await res.data;
             if (data?.success === false) {
@@ -109,7 +200,7 @@ const MessageContainer = ({ onBackUser }) => {
         } finally {
             setSending(false);
         }
-    }
+    };
 
     return (
         <div className='w-full h-full flex flex-col'>
@@ -151,21 +242,104 @@ const MessageContainer = ({ onBackUser }) => {
                                 </div>
                             </div>
                         </div>
+                        <button
+                            onClick={() => setShowSearch((prev) => !prev)}
+                            className='text-neutral-400 hover:text-indigo-400 transition p-2'
+                            title="Search messages"
+                        >
+                            {showSearch ? <IoClose size={22} /> : <IoSearch size={22} />}
+                        </button>
                     </div>
 
-                    <div className='flex-1 overflow-auto p-4 custom-scrollbar'>
+                    {showSearch && (
+                        <div className='bg-neutral-900 border-b border-neutral-800 p-3'>
+                            <form onSubmit={handleSearch} className='flex gap-2'>
+                                <input
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    type='text'
+                                    placeholder='Search by meaning, e.g. "hackathon deadline"...'
+                                    className='flex-1 bg-neutral-950 border border-neutral-700 text-neutral-200 focus:border-indigo-500 outline-none px-3 py-2 rounded-lg text-sm'
+                                    autoFocus
+                                />
+                                <button
+                                    type='submit'
+                                    disabled={searching}
+                                    className='bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm transition disabled:opacity-50'
+                                >
+                                    {searching ? '...' : 'Search'}
+                                </button>
+                                <button
+                                    type='button'
+                                    onClick={clearSearch}
+                                    className='text-neutral-400 hover:text-white px-3 py-2 text-sm'
+                                >
+                                    Clear
+                                </button>
+                            </form>
+                        </div>
+                    )}
+
+                    <div ref={messagesContainerRef} className='flex-1 overflow-auto p-4 custom-scrollbar'>
                         {loading && (
                             <div className="flex w-full h-full flex-col items-center justify-center">
                                 <div className="loading loading-spinner text-indigo-500"></div>
                             </div>
                         )}
-                        {!loading && messages?.length === 0 && (
+
+                        {!loading && showSearch && searchResults.length > 0 && (
+                            <div className='space-y-3 mb-4'>
+                                <p className='text-xs text-neutral-500 uppercase tracking-wide'>Search results</p>
+                                {searchResults.map((result) => (
+                                    <button
+                                        key={result._id}
+                                        onClick={() => scrollToMessage(result._id)}
+                                        className='w-full text-left bg-neutral-800 hover:bg-neutral-750 border border-neutral-700 rounded-xl p-3 transition'
+                                    >
+                                        <div className='flex justify-between items-start gap-2 mb-1'>
+                                            <span className='text-xs text-indigo-400 font-medium'>
+                                                {result.similarityPercent}% match
+                                            </span>
+                                            <span className='text-xs text-neutral-500'>
+                                                {new Date(result.createdAt).toLocaleString('en-IN', { dateStyle: 'short', timeStyle: 'short' })}
+                                            </span>
+                                        </div>
+                                        <p className='text-sm text-neutral-200'>{result.message}</p>
+                                        {selectedConversation.isRoom && result.senderId?.username && (
+                                            <p className='text-xs text-neutral-500 mt-1'>— {result.senderId.username}</p>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {!loading && !showSearch && hasMore && (
+                            <div className='flex justify-center mb-4'>
+                                <button
+                                    onClick={loadEarlierMessages}
+                                    disabled={loadingMore}
+                                    className='text-sm text-indigo-400 hover:text-indigo-300 transition disabled:opacity-50'
+                                >
+                                    {loadingMore ? 'Loading...' : 'Load earlier messages'}
+                                </button>
+                            </div>
+                        )}
+
+                        {!loading && !showSearch && messages?.length === 0 && (
                             <div className='flex items-center justify-center h-full'>
                                 <p className='text-center text-neutral-500 font-medium'>Be the first to say hello!</p>
                             </div>
                         )}
-                        {!loading && messages?.length > 0 && messages?.map((message) => (
-                            <div className='text-white' key={message?._id} ref={lastMessageRef}>
+
+                        {!loading && !showSearch && messages?.length > 0 && messages?.map((message, index) => (
+                            <div
+                                className='text-white'
+                                key={message?._id}
+                                ref={(el) => {
+                                    messageRefs.current[message._id] = el;
+                                    if (index === messages.length - 1) lastMessageRef.current = el;
+                                }}
+                            >
                                 <div className={`chat ${message.senderId?.toString() === authUser._id?.toString() ? 'chat-end' : 'chat-start'}`}>
                                     <div className={`chat-bubble text-sm md:text-base ${message.senderId?.toString() === authUser._id?.toString() ? 'bg-indigo-600 text-white' : 'bg-neutral-800 text-neutral-200'}`}>
                                         {message?.message}

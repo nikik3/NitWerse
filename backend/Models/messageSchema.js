@@ -21,8 +21,15 @@ const messageSchema = mongoose.Schema({
     roomId: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Room'
+    },
+    embedding: {
+        type: [Number],
+        default: []
     }
 },{timestamps:true})
+
+messageSchema.index({ conversationId: 1, createdAt: -1 });
+messageSchema.index({ roomId: 1, createdAt: -1 });
 
 const Message = mongoose.model("Message",messageSchema)
 
