@@ -3,6 +3,34 @@ import Message from "../Models/messageSchema.js";
 import Room from "../Models/roomModel.js";
 import { cosineSimilarity, getEmbedding, isEmbeddingEnabled } from "../services/embedding.js";
 
+export const searchStatus = async (req, res) => {
+    try {
+        if (!isEmbeddingEnabled()) {
+            return res.status(200).send({
+                enabled: false,
+                working: false,
+                message: "OPENAI_API_KEY is not set on the server.",
+            });
+        }
+
+        const { embedding, error } = await getEmbedding("health check");
+
+        res.status(200).send({
+            enabled: true,
+            working: Boolean(embedding),
+            message: embedding
+                ? "OpenAI embeddings are working."
+                : error || "OpenAI API call failed.",
+        });
+    } catch (error) {
+        res.status(500).send({
+            enabled: false,
+            working: false,
+            message: error.message || "Status check failed",
+        });
+    }
+};
+
 export const semanticSearch = async (req, res) => {
     try {
         const { id: conversationOrRoomId } = req.params;
@@ -20,9 +48,12 @@ export const semanticSearch = async (req, res) => {
             });
         }
 
-        const queryEmbedding = await getEmbedding(q);
+        const { embedding: queryEmbedding, error: embedError } = await getEmbedding(q);
         if (!queryEmbedding) {
-            return res.status(500).send({ success: false, message: "Failed to process search query" });
+            return res.status(500).send({
+                success: false,
+                message: embedError || "Failed to process search query",
+            });
         }
 
         let messageFilter;

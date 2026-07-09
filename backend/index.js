@@ -1,5 +1,5 @@
+import 'dotenv/config';
 import express from "express"
-import dotenv from 'dotenv'
 import dbConnect from "./DB/dbConnect.js";
 import authRouter from  './rout/authUser.js'
 import messageRouter from './rout/messageRout.js'
@@ -12,8 +12,6 @@ import path from "path";
 import {app , server} from './Socket/socket.js'
 
 const __dirname = path.resolve();
-
-dotenv.config();
 
 app.use(express.json());
 app.use(cookieParser())

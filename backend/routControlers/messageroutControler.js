@@ -7,9 +7,11 @@ import { getReciverSocketId, io } from "../Socket/socket.js";
 const DEFAULT_LIMIT = 50;
 
 async function embedMessageAsync(messageId, text) {
-    const embedding = await getEmbedding(text);
+    const { embedding, error } = await getEmbedding(text);
     if (embedding) {
         await Message.findByIdAndUpdate(messageId, { embedding });
+    } else if (error) {
+        console.error(`Failed to embed message ${messageId}:`, error);
     }
 }
 

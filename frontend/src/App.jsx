@@ -10,7 +10,7 @@ import { VerifyUser } from "./utils/VerifyUser.jsx";
 function App() {
   return (
     <>
-      <div className="w-screen min-h-screen">
+      <div className="w-full h-full min-h-screen">
         <Routes>
           <Route path="/" element={<Landing/>}/>
           <Route path="/login" element={<Login/>}/>

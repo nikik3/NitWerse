@@ -175,7 +175,7 @@ const Sidebar = ({ onSelectUser }) => {
     };
 
     return (
-        <div className='h-full flex flex-col text-neutral-200'>
+        <div className='w-full h-full min-h-0 flex flex-col text-neutral-200'>
             {/* NitWerse Brand Header */}
             <div className='px-4 pt-4 pb-3 border-b border-neutral-800 mb-1'>
                 <div className='flex items-center gap-2'>

@@ -1,7 +1,7 @@
 import express from "express";
 import rateLimit from "express-rate-limit";
 import isLogin from "../middleware/isLogin.js";
-import { semanticSearch } from "../routControlers/searchController.js";
+import { semanticSearch, searchStatus } from "../routControlers/searchController.js";
 
 const router = express.Router();
 
@@ -12,6 +12,7 @@ const searchLimiter = rateLimit({
     keyGenerator: (req) => req.user?._id?.toString() || req.ip,
 });
 
+router.get("/status", isLogin, searchStatus);
 router.get("/:id", isLogin, searchLimiter, semanticSearch);
 
 export default router;

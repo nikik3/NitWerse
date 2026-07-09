@@ -21,11 +21,30 @@ const MessageContainer = ({ onBackUser }) => {
     const [searchQuery, setSearchQuery] = useState("");
     const [searchResults, setSearchResults] = useState([]);
     const [searching, setSearching] = useState(false);
+    const [searchStatus, setSearchStatus] = useState(null);
     const lastMessageRef = useRef();
     const messagesContainerRef = useRef();
     const messageRefs = useRef({});
 
     const roomParam = selectedConversation?.isRoom ? '?isRoom=true' : '';
+
+    useEffect(() => {
+        if (!showSearch) {
+            setSearchStatus(null);
+            return;
+        }
+
+        const checkSearchStatus = async () => {
+            try {
+                const res = await axios.get('/api/search/status');
+                setSearchStatus(res.data);
+            } catch {
+                setSearchStatus({ working: false, message: 'Could not check search status.' });
+            }
+        };
+
+        checkSearchStatus();
+    }, [showSearch]);
 
     useEffect(() => {
         if (!socket) return;
@@ -203,7 +222,7 @@ const MessageContainer = ({ onBackUser }) => {
     };
 
     return (
-        <div className='w-full h-full flex flex-col'>
+        <div className='w-full h-full min-h-0 flex flex-col'>
             {selectedConversation === null ? (
                 <div className='flex items-center justify-center w-full h-full'>
                     <div className='px-4 text-center text-xl text-neutral-300 font-semibold flex flex-col items-center gap-4'>
@@ -277,6 +296,12 @@ const MessageContainer = ({ onBackUser }) => {
                                     Clear
                                 </button>
                             </form>
+                            {searchStatus && (
+                                <p className={`text-xs mt-2 ${searchStatus.working ? 'text-green-400' : 'text-amber-400'}`}>
+                                    {searchStatus.message}
+                                    {!searchStatus.working && ' Send new messages after fixing the key — old messages are not searchable.'}
+                                </p>
+                            )}
                         </div>
                     )}
 
