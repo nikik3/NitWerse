@@ -128,7 +128,7 @@ const Register = () => {
                         <div
                          id='gender' className="flex gap-2">
                         <label className="cursor-pointer label flex gap-2">
-                        <span className="label-text font-semibold text-neutral-300">male</span>
+                        <span className="label-text font-semibold text-neutral-300"></span>
                         <input 
                         onChange={()=>selectGender('male')}
                         checked={inputData.gender === 'male'}
@@ -136,7 +136,7 @@ const Register = () => {
                         className="checkbox checkbox-info border-neutral-600"/>
                         </label>
                         <label className="cursor-pointer label flex gap-2">
-                        <span className="label-text font-semibold text-neutral-300">female</span>
+                        <span className="label-text font-semibold text-neutral-300"></span>
                         <input 
                         checked={inputData.gender === 'female'}
                         onChange={()=>selectGender('female')}
